@@ -1,8 +1,8 @@
 package com.ifesdjeen.cascading.cassandra;
 
 import com.ifesdjeen.cascading.cassandra.hadoop.SerializerHelper;
-import org.apache.cassandra.exceptions.SyntaxException;
 import cascading.tuple.FieldsResolverException;
+import org.apache.cassandra.config.ConfigurationException;
 import org.apache.cassandra.db.ColumnSerializer;
 import org.apache.cassandra.thrift.*;
 import org.apache.cassandra.utils.ByteBufferUtil;
@@ -21,10 +21,10 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.mapred.*;
 import org.apache.hadoop.fs.Path;
 
+import org.apache.cassandra.hadoop.ColumnFamilyInputFormat;
 import org.apache.cassandra.hadoop.ColumnFamilyOutputFormat;
 import org.apache.cassandra.hadoop.ConfigHelper;
 
-import com.ifesdjeen.cascading.cassandra.hadoop.ColumnFamilyInputFormat;
 import com.ifesdjeen.cascading.cassandra.hadoop.CassandraHelper;
 
 import java.io.IOException;
@@ -118,10 +118,20 @@ public class CassandraScheme extends Scheme<JobConf, RecordReader, OutputCollect
     }
 
     SortedMap<ByteBuffer, IColumn> columns = (SortedMap<ByteBuffer, IColumn>) value;
-
     Tuple result = new Tuple();
 
-    result.add(ByteBufferUtil.string((ByteBuffer) key));
+    String keyType = (String)this.settings.get("source.keyType");
+    if (keyType != null) {
+      try {
+        result.add(SerializerHelper.deserialize((ByteBuffer)key, keyType));
+      }
+      catch (ConfigurationException ex) {
+        throw new IOException("Error deserializing key: " + key.toString(), ex);
+      }
+    }
+    else {
+      result.add(ByteBufferUtil.string((ByteBuffer) key));
+    }
 
     Map<String, String> dataTypes = this.getSourceTypes();
 

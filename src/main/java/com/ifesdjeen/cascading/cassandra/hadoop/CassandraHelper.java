@@ -1,7 +1,6 @@
 package com.ifesdjeen.cascading.cassandra.hadoop;
 
-import org.apache.cassandra.exceptions.ConfigurationException;
-import org.apache.cassandra.exceptions.SyntaxException;
+import org.apache.cassandra.config.ConfigurationException;
 
 import org.apache.cassandra.db.IColumn;
 import org.apache.cassandra.db.marshal.AbstractType;
@@ -70,7 +69,7 @@ public class CassandraHelper {
   }
 
 
-  public Map<ByteBuffer, AbstractType> makeValidatorMap(CfDef cfDef) throws IOException, SyntaxException {
+  public Map<ByteBuffer, AbstractType> makeValidatorMap(CfDef cfDef) throws IOException {
     TreeMap<ByteBuffer, AbstractType> validators = new TreeMap<ByteBuffer, AbstractType>();
     for (ColumnDef cd : getCfDef().getColumn_metadata()) {
       if (cd.getValidation_class() != null && !cd.getValidation_class().isEmpty()) {
@@ -84,7 +83,7 @@ public class CassandraHelper {
     return validators;
   }
 
-  public Map<ByteBuffer, AbstractType> getValidatorsMap() throws SyntaxException {
+  public Map<ByteBuffer, AbstractType> getValidatorsMap() {
     try {
       if (this.validatorsMap == null)
         this.validatorsMap = this.makeValidatorMap(this.getCfDef());
@@ -94,7 +93,7 @@ public class CassandraHelper {
     }
   }
 
-  private AbstractType getDefaultValidatorType() throws SyntaxException {
+  private AbstractType getDefaultValidatorType() {
     if (this.defaultValidatorType == null) {
       try {
         this.defaultValidatorType = TypeParser.parse(this.getCfDef().getDefault_validation_class());
@@ -105,14 +104,14 @@ public class CassandraHelper {
     return this.defaultValidatorType;
   }
 
-  public AbstractType getTypeForColumn(IColumn column) throws SyntaxException {
+  public AbstractType getTypeForColumn(IColumn column) {
     AbstractType type = this.getValidatorsMap().get(column.name());
     if (type == null)
       type = this.getDefaultValidatorType();
     return type;
   }
 
-  public CfDef getCfDef() throws SyntaxException {
+  public CfDef getCfDef() {
     if (this.cfDef == null) {
       try {
         Cassandra.Client client = this.cassandraClient();
