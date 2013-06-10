@@ -279,8 +279,6 @@ public class CassandraScheme extends Scheme<JobConf, RecordReader, OutputCollect
 
     if (this.settings.containsKey("source.inputSplitSize")) {
       ConfigHelper.setInputSplitSize(conf, (Integer) this.settings.get("source.inputSplitSize"));
-    } else {
-      ConfigHelper.setInputSplitSize(conf, 50);
     }
 
     if (this.settings.containsKey("cassandra.inputPartitioner")) {
