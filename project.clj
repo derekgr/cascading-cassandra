@@ -1,4 +1,4 @@
-(defproject org.leftwise/cascading-cassandra "0.1.0-SNAPSHOT"
+(defproject org.leftwise/cascading-cassandra "0.2.0-SNAPSHOT"
   :description ""
   :min-lein-version "2.0.0"
   :license {:name "Apache License 2.0"}
