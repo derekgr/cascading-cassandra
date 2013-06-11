@@ -1,76 +1,126 @@
 (ns com.ifesdjeen.cascading.cassandra.core-test
-  (:require [clojurewerkz.cassaforte.embedded :as e])
   (:use cascalog.api
         clojure.test
-        clojurewerkz.cassaforte.cql
         cascalog.playground
-        clojurewerkz.cassaforte.query
-        [clojurewerkz.cassaforte.bytes :as b]
         [midje sweet cascalog])
   (:require [cascalog.io :as io]
-            [cascalog.ops :as c])
+            [cascalog.ops :as c]
+            [clj-hector.core :as hector]
+            [clj-hector.ddl :as ddl])
   (:import [cascading.tuple Fields]
            [cascading.scheme Scheme]
+           [org.apache.cassandra.service EmbeddedCassandraService]
+           [org.apache.cassandra.thrift CassandraDaemon]
            [com.ifesdjeen.cascading.cassandra CassandraTap CassandraScheme]
            [org.apache.cassandra.utils ByteBufferUtil]
-           [org.apache.cassandra.thrift Column]))
+           [org.apache.cassandra.thrift Column]
+           [org.apache.log4j Logger Level]))
 
-(bootstrap-emacs)
+;; turn down verbose test output
+(-> (Logger/getLogger "org.apache.cassandra") (.setLevel Level/WARN))
+(-> (Logger/getLogger "me.prettyprint.cassandra") (.setLevel Level/WARN))
 
-(declare connected?)
-(defn create-test-column-family
+;; preamble for embedded cassandra
+(def ^:dynamic *cassandra-config* "src/resources/cassandra.yaml")
+(def ^:dynamic *cassandra-tmp* "/tmp/ci-cassandra")
+(def cluster "Test Cluster")
+(def keyspace "test")
+
+;; managing embedded cassandra
+(defn rmr [f]
+  (if (.isDirectory f) (dorun (map rmr (.listFiles f))) (.delete f)) (.delete f))
+
+(defn cleanup-cassandra []
+  (rmr (java.io.File. *cassandra-tmp*)))
+
+(defn start-embedded-cassandra []
+  (System/setProperty "cassandra.config" (str (.toURI (java.io.File. *cassandra-config*))))
+  (.start (EmbeddedCassandraService.)))
+
+(defn stop-embedded-cassandra []
+  (try
+    (CassandraDaemon/stop (into-array String nil)) ;; have to produce a String[] for the static method call
+    (catch NullPointerException ex nil))
+  (.addShutdownHook (Runtime/getRuntime) (Thread. cleanup-cassandra)))
+
+;; convenience macro
+(defmacro with-embedded-cassandra
+  [& body]
+  `(do
+     (start-embedded-cassandra)
+     (try ~@body (finally (stop-embedded-cassandra)))))
+
+;; memoize connections
+(defn make-connection
   []
-  (e/start-server!)
-  (alter-var-root (var *debug-output* ) (constantly false))
-  (when (not (bound? (var *client*)))
-    (connect! ["127.0.0.1"]))
-  (drop-keyspace :cascading_cassandra)
-  (create-keyspace :cascading_cassandra
-                   (with {:replication
-                          {:class "SimpleStrategy"
-                           :replication_factor 1}}))
-  (use-keyspace :cascading_cassandra)
-  (create-table :libraries
-                (with {:compact-storage true})
-                (column-definitions {:name :varchar
-                                     :language :varchar
-                                     :schmotes :int
-                                     :votes :int
-                                     :primary-key [:name]}))
-  (create-table :libraries_wide
-                (with {:compact-storage true})
-                (column-definitions {:name :varchar
-                                     :language :varchar
-                                     :votes :int
-                                     :primary-key [:name :language]})))
+   (hector/cluster cluster "localhost" 9999))
+
+(def connect! (memoize make-connection))
+
+;; seriously?
+(defn keyspace!
+  [ks]
+   (hector/keyspace (connect!) ks))
+
+(def connect! (memoize make-connection))
+
+(defn create-keyspace
+  []
+  (ddl/add-keyspace (connect!) {:name keyspace :strategy "SimpleStrategy"}))
+
+(defn- make-column
+  [[n type]]
+  {:name (name n) :validator type})
+
+(defn- make-columns
+  [d]
+  (into [] (map make-column d)))
+
+(defn create-cf
+  [name columns]
+  (ddl/add-column-family (connect!) keyspace {:name name :column-metadata (make-columns columns)}))
+
+(defn reset-schema!
+  []
+  (try
+  (ddl/drop-keyspace (connect!) keyspace)
+  (catch Exception e nil))
+  (create-keyspace)
+  (create-cf "libraries" {:language :utf-8
+                          :schmotes :integer
+                          :votes :integer}))
 
 (defn create-tap
-  [conf]
-  (let [defaults      {"sink.keyColumnName" "name"
-                       "db.host" "127.0.0.1"
-                       "db.port" "9160"
-                       "db.keyspace" "cascading_cassandra"
-                       "db.inputPartitioner" "org.apache.cassandra.dht.Murmur3Partitioner"
-                       "db.outputPartitioner" "org.apache.cassandra.dht.Murmur3Partitioner"}
+  [cf conf]
+  (let [defaults      {"db.columnFamily" cf
+                       "sink.keyColumnName" "name"
+                       "db.host" "localhost"
+                       "db.port" "9999"
+                       "db.keyspace" keyspace
+                       "cassandra.inputPartitioner" "org.apache.cassandra.dht.RandomPartitioner"
+                       "cassandra.outputPartitioner" "org.apache.cassandra.dht.RandomPartitioner"}
         scheme        (CassandraScheme. (merge defaults conf))
         tap           (CassandraTap. scheme)]
     tap))
 
+(defn seed-data
+  [ks cf n]
+  (dotimes [counter n]
+    (hector/put ks cf (str "Cassaforte" counter)
+           {"language" (str "Clojure" counter)
+            "schmotes" (int counter)
+            "votes" (int counter)})))
 
-(deftest t-cassandra-tap-as-source
-  (create-test-column-family)
-  (dotimes [counter 100]
-    (prepared
-     (insert :libraries
-             (values {:name (str "Cassaforte" counter)
-                      :language (str "Clojure" counter)
-                      :schmotes (int counter)
-                      :votes (int counter)}))))
-  (let [tap (create-tap {"source.types" {"language"    "UTF8Type"
-                                         "schmotes"    "Int32Type"
-                                         "votes"       "Int32Type"}
-                         "source.useWideRows" false
-                         "db.columnFamily" "libraries"})]
+(with-embedded-cassandra
+  (let [ks (keyspace! keyspace)
+        cf "libraries"
+        tap (create-tap cf {"source.types"
+                            {"language"    "UTF8Type"
+                            "schmotes"    "Int32Type"
+                            "votes"       "Int32Type"}})]
+    (reset-schema!)
+    (seed-data ks cf 100)
+
     (fact "Handles simple calculations"
           (<-
            [?count ?sum]
@@ -78,67 +128,3 @@
            (c/count ?count)
            (c/sum ?value3 :> ?sum))
           => (produces [[100 4950]]))))
-
-
-(deftest t-cassandra-tap-as-sink
-  (create-test-column-family)
-  (let [test-data [["Riak" "Erlang"]
-                   ["Cassaforte" "Clojure"]]]
-
-    (?<- (create-tap {"source.columns" ["name" "language"]
-                      "sink.outputMappings" {"name"     "?value1"
-                                             "language" "?value2"}
-                      "sink.keyColumnName" "name"
-                      "db.columnFamily" "libraries"})
-         [?value1 ?value2]
-         (test-data ?value1 ?value2))
-
-    (let [res (select :libraries)]
-      (is (= "Riak" (:name (first res))))
-      (is (= "Erlang" (:language (first res))))
-      (is (= "Cassaforte" (:name (second res))))
-      (is (= "Clojure" (:language (second res)))))))
-
-(deftest t-cassandra-tap-as-source-wide
-  (create-test-column-family)
-  (dotimes [counter 100]
-    (prepared
-     (insert :libraries_wide
-             (values {:name (str "Cassaforte" counter)
-                      :language (str "Clojure" counter)
-                      :votes (int counter)}))))
-
-  (let [tap (create-tap {"db.columnFamily" "libraries_wide"
-                         "source.useWideRows" true
-                         "source.types" {"key"   "UTF8Type"
-                                         "value" "Int32Type"}})]
-    (fact "Handles simple calculations"
-          (<-
-           [?count ?sum]
-           (tap ?value1 ?value2 ?value3)
-           (c/count ?count)
-           (c/sum ?value3 :> ?sum))
-          => (produces [[100 4950]]))))
-
-(deftest t-cassandra-tap-as-sink-wide
-  (create-test-column-family)
-  (let [test-data [["Riak" "Erlang" (int 100)]
-                   ["Cassaforte" "Clojure" (int 150)]]]
-
-    (?<- (create-tap {"sink.sinkImpl" "com.ifesdjeen.cascading.cassandra.DynamicRowSink"
-                      "sink.keyColumnName" "name"
-                      "sink.outputMappings" {"name" "?value1"}
-                      "sink.outputWideMappings" {"columnName" "?value2"
-                                                 "columnValue" "?value3"}
-                      "db.columnFamily" "libraries_wide"})
-         [?value1 ?value2 ?value3]
-         (test-data ?value1 ?value2 ?value3))
-
-    (let [res (select :libraries_wide)]
-      (is (= "Riak" (:name (first res))))
-      (is (= "Erlang" (:language (first res))))
-      (is (= "Cassaforte" (:name (second res))))
-      (is (= "Clojure" (:language (second res))))))
-
-
-  )

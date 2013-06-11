@@ -96,8 +96,6 @@ public class CassandraScheme extends Scheme<JobConf, RecordReader, OutputCollect
   }
 
   /**
-   * FIXME: Pitfalls: Currently only String is supported as a rowKey.
-   *
    * @param flowProcess
    * @param sourceCall
    * @return
@@ -244,7 +242,6 @@ public class CassandraScheme extends Scheme<JobConf, RecordReader, OutputCollect
   public void sourceConfInit(FlowProcess<JobConf> process,
                              Tap<JobConf, RecordReader, OutputCollector> tap, JobConf conf) {
     logger.info("Configuring source...");
-
     ConfigHelper.setInputRpcPort(conf, port);
     ConfigHelper.setInputInitialAddress(conf, this.host);
 
@@ -300,6 +297,15 @@ public class CassandraScheme extends Scheme<JobConf, RecordReader, OutputCollect
     }
     FileInputFormat.addInputPaths(conf, getPath().toString());
     conf.setInputFormat(ColumnFamilyInputFormat.class);
+
+    /**
+    // I missed you, java. Stay classy.
+    Iterator<Map.Entry<String,String>> iter = conf.iterator();
+    while (iter.hasNext()) {
+      Map.Entry entry = iter.next();
+      System.out.println(entry.getKey() + " : "  + entry.getValue());
+    }
+    */
   }
 
   public Path getPath() {

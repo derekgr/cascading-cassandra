@@ -13,17 +13,15 @@
                                           :exclusions [org.apache.hadoop
                                                        org.apache.thrift/libthrift
                                                        org.apache.httpcomponents/httpclient]]
-                                         ;; [org.apache.hadoop/hadoop-core "1.0.4"
-                                         ;;   :exclusions [org.codehaus.jackson/jackson-mapper-asl]]
+                                         [org.clojars.paul/clj-hector "0.2.10"]
                                          [org.apache.hadoop/hadoop-core "0.20.2"
                                           :exclusions [org.codehaus.jackson/jackson-mapper-asl]]
-                                         ]}
+                                         ]
+                        :plugins [[lein-midje "3.0.1"]]}
              :dev      {:resource-paths ["src/resources"]
                         :jvm-opts       ["-server" "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n"
                                          "-Xmx768m"]
                         :dependencies   [[org.xerial.snappy/snappy-java "1.0.5-M3"]
-                                         [clojurewerkz/cassaforte "1.0.0-beta13"
-                                          :exclusions [org.apache.thrift/libthrift]]
                                          [commons-lang/commons-lang "2.6"]]}}
   :test-selectors {:all     (constantly true)
                    :focus   :focus
