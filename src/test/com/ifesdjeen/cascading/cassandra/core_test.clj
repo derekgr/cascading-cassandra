@@ -12,7 +12,9 @@
            [org.apache.cassandra.service EmbeddedCassandraService]
            [org.apache.cassandra.thrift CassandraDaemon]
            [com.ifesdjeen.cascading.cassandra CassandraTap CassandraScheme]
+           [com.ifesdjeen.cascading.cassandra.hadoop SerializerHelper]
            [org.apache.cassandra.utils ByteBufferUtil]
+           [org.apache.cassandra.db.marshal UTF8Type IntegerType]
            [org.apache.cassandra.thrift Column]
            [org.apache.log4j Logger Level]))
 
@@ -88,7 +90,8 @@
   (create-keyspace)
   (create-cf "libraries" {:language :utf-8
                           :schmotes :integer
-                          :votes :integer}))
+                          :votes :integer})
+  (create-cf "composites" {:value :composite}))
 
 (defn create-tap
   [cf conf]
@@ -111,13 +114,31 @@
             "schmotes" (int counter)
             "votes" (int counter)})))
 
+(def test-composite-data
+  [["row1" 100 1]
+   ["row2" 200 2]])
+
+(defn unpack
+  [row]
+  (let [id (first (keys row))
+        row (row id)]
+    (prn row)))
+
 (with-embedded-cassandra
   (let [ks (keyspace! keyspace)
         cf "libraries"
         tap (create-tap cf {"source.types"
                             {"language"    "UTF8Type"
                             "schmotes"    "Int32Type"
-                            "votes"       "Int32Type"}})]
+                            "votes"       "Int32Type"}})
+        composite-tap (create-tap "composites"
+                        {"sink.compositeColumns" ["composite"]
+                         "sink.keyColumnName" "id"
+                         "sink.sinkImpl" "com.ifesdjeen.cascading.cassandra.CompositeRowSink"
+                         "sink.compositeColumnTypes" ["IntegerType"]
+                         "sink.outputMappings" {"id" "?id"
+                                                "composite" "?composite"
+                                                "value" "?value"}})]
     (reset-schema!)
     (seed-data ks cf 100)
 
@@ -127,4 +148,11 @@
            (tap ?value1 ?value2 ?value3 ?value4)
            (c/count ?count)
            (c/sum ?value3 :> ?sum))
-          => (produces [[100 4950]]))))
+          => (produces [[100 4950]]))
+
+    (?<- composite-tap [?id ?composite ?value]
+      (test-composite-data ?id ?composite ?value))
+
+    (doall (map unpack (hector/get-rows ks "composites" ["row1" "row2"])))
+    (fact "Outputs composite columns"
+        (hector/get-rows ks "composites" ["row1" "row2"]) => truthy)))

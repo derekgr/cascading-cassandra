@@ -6,9 +6,13 @@ import cascading.tuple.TupleEntry;
 import cascading.tuple.FieldsResolverException;
 import org.apache.cassandra.thrift.*;
 import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.db.marshal.IntegerType;
 import org.apache.cassandra.db.marshal.CompositeType;
 
 import com.ifesdjeen.cascading.cassandra.hadoop.CassandraHelper;
+import com.ifesdjeen.cascading.cassandra.hadoop.SerializerHelper;
+import org.apache.cassandra.config.ConfigurationException;
 
 import java.io.IOException;
 import java.util.*;
@@ -31,17 +35,37 @@ public class CompositeRowSink implements ISink {
 
     public List<Mutation> sink( Map<String, Object> settings,
                                 TupleEntry tupleEntry ) {
-
         Map<String, String> fieldMappings = (Map<String, String>) settings.get("sink.outputMappings");
         String keyColumnName = (String) settings.get("sink.keyColumnName");
         List<String> composites = (List<String>) settings.get("sink.compositeColumns");
-        List<AbstractType<?>> types = (List<AbstractType<?>>) settings.get("sink.compositeColumnTypes");
+        List<String> configuredTypes = (List<String>) settings.get("sink.compositeColumnTypes");
+
+        ArrayList<AbstractType<?>> types = new ArrayList<AbstractType<?>>();
+
+        for(String type: configuredTypes) {
+          try {
+            types.add(SerializerHelper.inferType(type));
+          }
+          catch (ConfigurationException e) {
+            throw new RuntimeException("Error instantiating Cassandra type: " + type, e);
+          }
+        }
+
+        // Last type is always the column name.
+        types.add(UTF8Type.instance);
+
         Set<String> columnFieldNames = (Set<String>)fieldMappings.keySet();
 
         int nfields = columnFieldNames.size() - composites.size();
         List<Mutation> mutations = new ArrayList<Mutation>(nfields);
 
         ArrayList compositeValues = new ArrayList();
+        /**
+        Fields f = tupleEntry.getFields();
+        for (int i=0; i < f.size(); i++) {
+          System.out.println(f.get(i).toString());
+        }
+        */
         for (String columnFieldName : composites) {
             String columnFieldMapping = fieldMappings.get(columnFieldName);
             Object tupleEntryValue = null;
