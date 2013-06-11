@@ -14,8 +14,9 @@
            [com.ifesdjeen.cascading.cassandra CassandraTap CassandraScheme]
            [com.ifesdjeen.cascading.cassandra.hadoop SerializerHelper]
            [org.apache.cassandra.utils ByteBufferUtil]
-           [org.apache.cassandra.db.marshal UTF8Type IntegerType]
+           [org.apache.cassandra.db.marshal TypeParser UTF8Type IntegerType CompositeType]
            [org.apache.cassandra.thrift Column]
+           [java.nio ByteBuffer]
            [org.apache.log4j Logger Level]))
 
 ;; turn down verbose test output
@@ -118,11 +119,24 @@
   [["row1" 100 1]
    ["row2" 200 2]])
 
+(def test-composite-output
+  [["row1" {[100 "value"] 1}]
+   ["row2" {[200 "value"] 2}]])
+
+(defn unpack-composite
+  [[composite colname]]
+  [(SerializerHelper/deserialize composite "LongType") (SerializerHelper/deserialize colname "UTF8Type")])
+
 (defn unpack
   [row]
   (let [id (first (keys row))
-        row (row id)]
-    (prn row)))
+        row (row id)
+        columns (keys row)
+        handler (TypeParser/parse "CompositeType(LongType,UTF8Type)")
+        composites (map #(.split handler (ByteBuffer/wrap %)) columns)
+        composites (map unpack-composite composites)
+        values (apply hash-map (interleave composites (vals row)))]
+  [id values]))
 
 (with-embedded-cassandra
   (let [ks (keyspace! keyspace)
@@ -135,7 +149,7 @@
                         {"sink.compositeColumns" ["composite"]
                          "sink.keyColumnName" "id"
                          "sink.sinkImpl" "com.ifesdjeen.cascading.cassandra.CompositeRowSink"
-                         "sink.compositeColumnTypes" ["IntegerType"]
+                         "sink.compositeColumnTypes" ["LongType"]
                          "sink.outputMappings" {"id" "?id"
                                                 "composite" "?composite"
                                                 "value" "?value"}})]
@@ -153,6 +167,6 @@
     (?<- composite-tap [?id ?composite ?value]
       (test-composite-data ?id ?composite ?value))
 
-    (doall (map unpack (hector/get-rows ks "composites" ["row1" "row2"])))
     (fact "Outputs composite columns"
-        (hector/get-rows ks "composites" ["row1" "row2"]) => truthy)))
+      (map unpack (hector/get-rows ks "composites" ["row1" "row2"] :v-serializer :long)) =>
+        (just test-composite-output :in-any-order))))
