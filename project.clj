@@ -1,4 +1,4 @@
-(defproject org.leftwise/cascading-cassandra "0.2.0-SNAPSHOT"
+(defproject org.leftwise/cascading-cassandra "0.2.1-SNAPSHOT"
   :description ""
   :min-lein-version "2.0.0"
   :license {:name "Apache License 2.0"}
@@ -15,11 +15,11 @@
                                                        org.apache.httpcomponents/httpclient]]
                                          [org.clojars.paul/clj-hector "0.2.10"]
                                          [org.apache.hadoop/hadoop-core "0.20.2"
-                                          :exclusions [org.codehaus.jackson/jackson-mapper-asl]]
-                                         ]
+                                          :exclusions [org.codehaus.jackson/jackson-mapper-asl]]]
                         :plugins [[lein-midje "3.0.1"]]}
              :dev      {:resource-paths ["src/resources"]
-                        :jvm-opts       ["-server" "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n"
+                        :jvm-opts       ["-server"
+                                         "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n"
                                          "-Xmx768m"]
                         :dependencies   [[org.xerial.snappy/snappy-java "1.0.5-M3"]
                                          [commons-lang/commons-lang "2.6"]]}}
