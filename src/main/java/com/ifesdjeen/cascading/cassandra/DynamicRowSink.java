@@ -30,6 +30,8 @@ public class DynamicRowSink
         String columnNameField = (String) wideMappings.get("columnName");
         String columnValueField = (String) wideMappings.get("columnValue");
 
+        int ttl = (Integer)settings.get("sink.columnTtl", 0);
+
         List<Mutation> mutations = new ArrayList<Mutation>();
 
         Object tupleEntryColumnNameValue = null;
@@ -53,7 +55,8 @@ public class DynamicRowSink
             logger.info("Column value value {}", tupleEntryColumnValueValue);
 
             Mutation mutation = Util.createColumnPutMutation(CassandraHelper.serialize(tupleEntryColumnNameValue),
-                                                             CassandraHelper.serialize(tupleEntryColumnValueValue));
+                                                             CassandraHelper.serialize(tupleEntryColumnValueValue),
+                                                             ttl);
             mutations.add(mutation);
         }
 

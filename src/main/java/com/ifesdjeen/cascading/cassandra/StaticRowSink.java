@@ -30,6 +30,7 @@ public class StaticRowSink
         Map<String, String> fieldMappings = (Map<String, String>) settings.get("sink.outputMappings");
 
         String keyColumnName = (String) settings.get("sink.keyColumnName");
+        int ttl = (Integer) settings.get("sink.columnTtl", 0);
 
         List<Mutation> mutations = new ArrayList<Mutation>(nfields);
 
@@ -49,7 +50,8 @@ public class StaticRowSink
                 logger.info("Column filed value {}", tupleEntry.get(columnFieldMapping));
 
                 Mutation mutation = Util.createColumnPutMutation(CassandraHelper.serialize(columnFieldName),
-                                                                 CassandraHelper.serialize(tupleEntry.get(columnFieldMapping)));
+                                                                 CassandraHelper.serialize(tupleEntry.get(columnFieldMapping)),
+                                                                 ttl);
                 mutations.add(mutation);
             }
         }
