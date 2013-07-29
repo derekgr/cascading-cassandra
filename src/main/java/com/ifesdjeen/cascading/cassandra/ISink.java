@@ -12,16 +12,16 @@ public interface ISink {
                          TupleEntry tupleEntry );
   public static class Util {
     public static Mutation createColumnPutMutation(ByteBuffer name, ByteBuffer value) {
-      return createColumnPutMutation(name, value, 0);
+      return createColumnPutMutation(name, value, null);
     }
 
-    public static Mutation createColumnPutMutation(ByteBuffer name, ByteBuffer value, int ttl) {
+    public static Mutation createColumnPutMutation(ByteBuffer name, ByteBuffer value, Integer ttl) {
       Column column = new Column(name);
       column.setName(name);
       column.setValue(value);
       column.setTimestamp(System.currentTimeMillis());
-      if (ttl > 0) {
-        column.setTtl(ttl);
+      if (ttl != null && ttl.intValue() > 0) {
+        column.setTtl(ttl.intValue());
       }
 
       Mutation m = new Mutation();

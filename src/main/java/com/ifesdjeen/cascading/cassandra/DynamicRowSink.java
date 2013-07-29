@@ -30,7 +30,7 @@ public class DynamicRowSink
         String columnNameField = (String) wideMappings.get("columnName");
         String columnValueField = (String) wideMappings.get("columnValue");
 
-        int ttl = (Integer)settings.get("sink.columnTtl", 0);
+        Integer ttl = (Integer)settings.get("sink.columnTtl");
 
         List<Mutation> mutations = new ArrayList<Mutation>();
 

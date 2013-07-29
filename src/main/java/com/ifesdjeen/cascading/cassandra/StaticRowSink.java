@@ -30,7 +30,7 @@ public class StaticRowSink
         Map<String, String> fieldMappings = (Map<String, String>) settings.get("sink.outputMappings");
 
         String keyColumnName = (String) settings.get("sink.keyColumnName");
-        int ttl = (Integer) settings.get("sink.columnTtl", 0);
+        Integer ttl = (Integer) settings.get("sink.columnTtl");
 
         List<Mutation> mutations = new ArrayList<Mutation>(nfields);
 
