@@ -49,15 +49,17 @@ public class DynamicRowSink
         }
 
         if (tupleEntryColumnNameValue != null && tupleEntryColumnNameValue != keyColumnName) {
-            logger.info("Mapped column name field {}", columnNameField);
-            logger.info("column name value {}", tupleEntryColumnNameValue);
-            logger.info("Mapped column value field {}", columnValueField);
-            logger.info("Column value value {}", tupleEntryColumnValueValue);
+          if (logger.isDebugEnabled()) {
+            logger.debug("Mapped column name field {}", columnNameField);
+            logger.debug("column name value {}", tupleEntryColumnNameValue);
+            logger.debug("Mapped column value field {}", columnValueField);
+            logger.debug("Column value value {}", tupleEntryColumnValueValue);
+          }
 
-            Mutation mutation = Util.createColumnPutMutation(CassandraHelper.serialize(tupleEntryColumnNameValue),
-                                                             CassandraHelper.serialize(tupleEntryColumnValueValue),
-                                                             ttl);
-            mutations.add(mutation);
+          Mutation mutation = Util.createColumnPutMutation(CassandraHelper.serialize(tupleEntryColumnNameValue),
+                                                           CassandraHelper.serialize(tupleEntryColumnValueValue),
+                                                           ttl);
+          mutations.add(mutation);
         }
 
         return mutations;
